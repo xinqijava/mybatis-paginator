@@ -17,8 +17,10 @@
 package com.github.miemiedev.mybatis.paginator.support;
 
 import com.github.miemiedev.mybatis.paginator.dialect.Dialect;
+import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.transaction.Transaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +58,57 @@ public class SQLHelp {
         Connection connection = transaction.getConnection();
         PreparedStatement countStmt = connection.prepareStatement(count_sql);
         DefaultParameterHandler handler = new DefaultParameterHandler(mappedStatement,parameterObject,boundSql);
+        handler.setParameters(countStmt);
+
+        ResultSet rs = countStmt.executeQuery();
+        int count = 0;
+        if (rs.next()) {
+            count = rs.getInt(1);
+        }
+        logger.debug("Total count: {}", count);
+        return count;
+
+    }
+
+
+    /**
+     * 尝试获取已经存在的在 MS，提供对手写count和page的支持
+     *
+     * @param configuration
+     * @param msId
+     * @return
+     */
+    public static MappedStatement getExistedMappedStatement(Configuration configuration, String msId) {
+        MappedStatement mappedStatement = null;
+        try {
+            mappedStatement = configuration.getMappedStatement(msId, false);
+        } catch (Throwable t) {
+            //ignore
+        }
+        return mappedStatement;
+    }
+
+    /**
+     * 执行自定义语句的查询
+     *
+     * @param executor
+     * @param countMs
+     * @param parameter
+     * @param boundSql
+     * @return
+     * @throws SQLException
+     */
+    public static Integer executeManualCount(Executor executor, MappedStatement countMs,
+                                             Object parameter, BoundSql boundSql) throws SQLException {
+        BoundSql countBoundSql = countMs.getBoundSql(parameter);
+
+        final String count_sql = countBoundSql.getSql();
+        logger.debug("Total count SQL [{}] ", count_sql);
+        logger.debug("Total count Parameters: {} ", parameter);
+
+        Connection connection = executor.getTransaction().getConnection();
+        PreparedStatement countStmt = connection.prepareStatement(count_sql);
+        DefaultParameterHandler handler = new DefaultParameterHandler(countMs, parameter, boundSql);
         handler.setParameters(countStmt);
 
         ResultSet rs = countStmt.executeQuery();
